@@ -110,48 +110,172 @@
     </section>
   </div>
 
-  <script>
-    // ---- PWA boot
-    <script>
-// === Tabs 最終兵器（クリック/タップ/ハッシュ対応、既存コードに依存しない）===
-(function(){
-  const tabsEl = document.getElementById('tabs');
-  if (!tabsEl) return;
+<!-- ここから <script>〜</script> を “1個だけ” にする -->
+<script>
+// ---- PWA boot (cache bust)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () =>
+    navigator.serviceWorker.register('/sw.js?v=12').catch(console.error)
+  );
+}
 
-  function showTab(tab){
-    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-    const cur = tabsEl.querySelector(`.tab[data-tab="${tab}"]`);
-    if (cur) cur.classList.add('active');
-    document.querySelectorAll('.tabpane').forEach(p=>p.style.display = (p.id===tab?'':'none'));
-    if (typeof renderFoodsList === 'function' && tab==='foods') renderFoodsList();
-  }
+// ---- Data (100gあたりのサンプル)
+const foodDb = [
+  {id:'apple', name:'りんご', cat:'果物', kcal:52, p:0.3, f:0.2, c:14},
+  {id:'bread', name:'食パン', cat:'穀類', kcal:264, p:9, f:4.2, c:46},
+  {id:'chicken', name:'鶏むね(皮なし)', cat:'肉類', kcal:108, p:23, f:1.5, c:0},
+  {id:'egg', name:'卵', cat:'卵類', kcal:151, p:12.3, f:10.3, c:0.4},
+  {id:'rice', name:'ごはん(白米)', cat:'穀類', kcal:168, p:2.5, f:0.3, c:37},
+  {id:'tofu', name:'木綿豆腐', cat:'大豆', kcal:72, p:6.6, f:4.2, c:1.2},
+  {id:'yogurt', name:'ヨーグルト(無糖)', cat:'乳製品', kcal:62, p:3.6, f:3.3, c:4.7},
+  {id:'salmon', name:'サーモン(生)', cat:'魚介', kcal:133, p:20.1, f:4.5, c:0},
+  {id:'banana', name:'バナナ', cat:'果物', kcal:93, p:1.1, f:0.2, c:23},
+  {id:'olive', name:'オリーブオイル', cat:'油脂', kcal:921, p:0, f:100, c:0}
+];
 
-  // クリック
-  tabsEl.addEventListener('click', e=>{
-    const t = e.target.closest('.tab');
-    if (t) showTab(t.dataset.tab);
-  }, {passive:true});
+// ---- Utils & state
+const $ = (s, el=document)=>el.querySelector(s);
+const $$ = (s, el=document)=>[...el.querySelectorAll(s)];
+const pad = n => String(n).padStart(2,'0');
+const yyyyMmDd = (d=new Date()) => [d.getFullYear(), pad(d.getMonth()+1), pad(d.getDate())].join('-');
 
-  // タッチ（端末で click を拾わない事故対策）
-  tabsEl.addEventListener('touchend', e=>{
-    const t = e.target.closest('.tab');
-    if (t) { e.preventDefault(); showTab(t.dataset.tab); }
-  }, {passive:false});
+const state = {
+  date: yyyyMmDd(new Date()),
+  entries: JSON.parse(localStorage.getItem('entriesByDate')||'{}'),
+  favs: JSON.parse(localStorage.getItem('favFoods')||'[]'),
+  settings: JSON.parse(localStorage.getItem('settings')||'{}')
+};
 
-  // URLで #foods を指定されたら強制で切替
-  const h = location.hash.replace('#','');
-  if (h) showTab(h);
+// ---- Tabs（クリック/タップ/ハッシュ対応・委譲）
+const tabsEl = document.getElementById('tabs');
+function showTab(tab){
+  $$('.tab').forEach(x=>x.classList.remove('active'));
+  const cur = $(`.tab[data-tab="${tab}"]`, tabsEl);
+  if (cur) cur.classList.add('active');
+  $$('.tabpane').forEach(p=>p.style.display = (p.id===tab?'':'none'));
+  if (tab==='foods') renderFoodsList();
+}
+tabsEl.addEventListener('click', e=>{
+  const t = e.target.closest('.tab'); if (t) showTab(t.dataset.tab);
+}, {passive:true});
+tabsEl.addEventListener('touchend', e=>{
+  const t = e.target.closest('.tab'); if (t) { e.preventDefault(); showTab(t.dataset.tab); }
+}, {passive:false});
+window.addEventListener('hashchange', ()=>{
+  const h = location.hash.replace('#',''); if (h) showTab(h);
+});
+
+// ---- 食品DBレンダリング
+function renderFoodOptions(){
+  const favFirst = [...foodDb].sort((a,b)=>
+    (state.favs.includes(b.id)-state.favs.includes(a.id)) || a.name.localeCompare(b.name,'ja')
+  );
+  $('#foodSelect').innerHTML = favFirst.map(f=>`<option value="${f.id}">${state.favs.includes(f.id)?'★ ':''}${f.name}</option>`).join('');
+}
+function renderFoodsList(){
+  const q = ($('#q')?.value||'').toLowerCase();
+  const data = foodDb.filter(f => f.name.toLowerCase().includes(q) || f.cat.toLowerCase().includes(q));
+  const wrap = document.createElement('div');
+  data.forEach(f=>{
+    const div = document.createElement('div');
+    div.className='card';
+    div.innerHTML = `
+      <div class="row">
+        <div class="grow"><b>${f.name}</b> <small class="muted">(${f.cat})</small><br>
+          <small class="muted">100gあたり: ${f.kcal}kcal / P${f.p} F${f.f} C${f.c}</small>
+        </div>
+        <div class="fav" data-id="${f.id}">${state.favs.includes(f.id)?'★':'☆'}</div>
+      </div>`;
+    div.querySelector('.fav').onclick = (e)=>{
+      const id = e.target.dataset.id;
+      if (state.favs.includes(id)) state.favs = state.favs.filter(x=>x!==id);
+      else state.favs.push(id);
+      localStorage.setItem('favFoods', JSON.stringify(state.favs));
+      renderFoodOptions(); renderFoodsList();
+    };
+    wrap.appendChild(div);
+  });
+  const container = $('#foodsList'); if (container){ container.innerHTML=''; container.appendChild(wrap); }
+}
+
+// ---- 入力・計算まわり
+$('#q')?.addEventListener('input', renderFoodsList);
+$('#clearFav')?.addEventListener('click', ()=>{
+  state.favs=[]; localStorage.setItem('favFoods','[]'); renderFoodOptions(); renderFoodsList();
+});
+
+$('#addBtn')?.addEventListener('click', ()=>{
+  const food = foodDb.find(f => f.id === $('#foodSelect').value);
+  const g = Number($('#grams').value||0);
+  if (!food || g<=0) { alert('食品とグラムを入力してね'); return; }
+  const r = g/100;
+  const e = { id:crypto.randomUUID(), foodId:food.id, name:food.name, g,
+    kcal: food.kcal*r, p:food.p*r, f:food.f*r, c:food.c*r };
+  const key = state.date;
+  state.entries[key] = (state.entries[key]||[]).concat(e);
+  localStorage.setItem('entriesByDate', JSON.stringify(state.entries));
+  $('#grams').value = ''; renderLog();
+});
+
+$('#date')?.addEventListener('change', ()=>{
+  state.date = $('#date').value; renderLog();
+});
+
+// ---- 目標計算
+function bmr(s){
+  const w=+s.w||60, h=+s.h||165, age=+s.age||30;
+  return (s.sex||'f')==='m' ? 10*w + 6.25*h - 5*age + 5 : 10*w + 6.25*h - 5*age - 161;
+}
+function recom(s){
+  const tdee = bmr(s) * (+s.act||1.55) + (+s.goal||0);
+  const p = 2.0*(+s.w||60), f = 0.8*(+s.w||60);
+  const c = Math.max(0, (tdee - (p*4 + f*9))/4);
+  return {tdee,p,f,c};
+}
+$('#saveSettings')?.addEventListener('click', ()=>{
+  state.settings = { w:$('#w').value, h:$('#h').value, age:$('#age').value,
+    sex:$('#sex').value, act:$('#act').value, goal:$('#goal').value };
+  localStorage.setItem('settings', JSON.stringify(state.settings));
+  updateGoalBadge(); alert('保存しました');
+});
+function updateGoalBadge(){
+  const s = state.settings||{};
+  if (!s.w) { $('#goalText').textContent='--'; return; }
+  const r = recom(s);
+  const txt = `${Math.round(r.tdee)}kcal / P${r.p.toFixed(0)} F${r.f.toFixed(0)} C${r.c.toFixed(0)}`;
+  $('#goalText').textContent = txt; $('#goalCalc').textContent = txt;
+}
+
+// ---- 表描画
+function renderLog(){
+  const rows = state.entries[state.date] || [];
+  const sum = (k)=>rows.reduce((a,x)=>a+(+x[k]||0),0);
+  const tbody = $('#logTable tbody'); if (!tbody) return;
+  tbody.innerHTML = rows.map(r =>
+    `<tr><td>${r.name}</td><td>${r.g}</td><td>${Math.round(r.kcal)}</td><td>${(r.p).toFixed(1)}</td><td>${(r.f).toFixed(1)}</td><td>${Math.round(r.c)}</td><td><button data-id="${r.id}" class="del">削除</button></td></tr>`
+  ).join('');
+  $$('.del', tbody).forEach(btn => btn.onclick = ()=>{
+    const id = btn.dataset.id;
+    state.entries[state.date] = (state.entries[state.date]||[]).filter(x=>x.id!==id);
+    localStorage.setItem('entriesByDate', JSON.stringify(state.entries));
+    renderLog();
+  });
+  const tot = {kcal:sum('kcal'), p:sum('p'), f:sum('f'), c:sum('c')};
+  $('#sumText').textContent = `${Math.round(tot.kcal)}kcal / P${tot.p.toFixed(1)} F${tot.f.toFixed(1)} C${Math.round(tot.c)}`;
+  $('#tip').textContent = (tot.f>60) ? '今日は脂質控えめでバランス調整を。'
+                     : (tot.p<60) ? 'タンパク質をもう一品プラス。'
+                     : 'いいペース！水分補給も忘れずに。';
+  updateGoalBadge();
+}
+
+// ---- init
+(function init(){
+  const s = state.settings||{};
+  if ($('#w')) { $('#w').value = s.w||''; $('#h').value = s.h||''; $('#age').value = s.age||''; }
+  if ($('#sex')) { $('#sex').value = s.sex||'f'; $('#act').value = s.act||'1.55'; $('#goal').value = s.goal||'0'; }
+  if ($('#date')) $('#date').value = state.date;
+  renderFoodOptions(); renderFoodsList(); renderLog();
+  const h = location.hash.replace('#',''); if (h) showTab(h);
 })();
 </script>
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js?v=10').catch(console.error));
-    }
-
-    // ---- Data (sample foods per 100g)
-    const foodDb = [
-      {id:'apple', name:'りんご', cat:'果物', kcal:52, p:0.3, f:0.2, c:14},
-      {id:'bread', name:'食パン', cat:'穀類', kcal:264, p:9, f:4.2, c:46},
-      {id:'chicken', name:'鶏むね(皮なし)', cat:'肉類', kcal:108, p:23, f:1.5, c:0},
-      {id:'egg', name:'卵', cat:'卵類', kcal:151, p:12.3, f:10.3, c:0.4},
-      {id:'rice', name:'ごはん(白米)', cat:'穀類',
