@@ -28,12 +28,11 @@
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="nav">
-      <div class="tab active" data-tab="log">食事ログ</div>
-      <div class="tab" data-tab="foods">食品DB</div>
-      <div class="tab" data-tab="settings">設定</div>
-    </div>
+<div class="nav" id="tabs">
+  <div class="tab active" data-tab="log" role="button" tabindex="0">食事ログ</div>
+  <div class="tab" data-tab="foods" role="button" tabindex="0">食品DB</div>
+  <div class="tab" data-tab="settings" role="button" tabindex="0">設定</div>
+</div>
 
     <section id="log" class="tabpane">
       <div class="card">
@@ -138,12 +137,31 @@
       settings: JSON.parse(localStorage.getItem('settings')||'{}')
     };
 
-    $$('.tab').forEach(t => t.onclick = () => {
-      $$('.tab').forEach(x=>x.classList.remove('active'));
-      t.classList.add('active');
-      const tab = t.dataset.tab;
-      $$('.tabpane').forEach(p => p.style.display = (p.id===tab?'':'none'));
-    });
+   // ---- Tabs (delegation: click/touch/keyboard で確実に反応)
+const tabsEl = document.getElementById('tabs');
+function showTab(tab){
+  $$('.tab').forEach(x=>x.classList.remove('active'));
+  const current = $(`.tab[data-tab="${tab}"]`, tabsEl);
+  if (current) current.classList.add('active');
+  $$('.tabpane').forEach(p => p.style.display = (p.id===tab?'':'none'));
+  if (tab === 'foods') renderFoodsList();  // 開いたとき必ず描画
+}
+tabsEl.addEventListener('click', (e) => {
+  const t = e.target.closest('.tab');
+  if (!t) return;
+  showTab(t.dataset.tab);
+});
+tabsEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    const t = e.target.closest('.tab');
+    if (t) { e.preventDefault(); showTab(t.dataset.tab); }
+  }
+});
+// URLハッシュでも切替可（例: .../#foods）
+window.addEventListener('hashchange', () => {
+  const h = location.hash.replace('#','');
+  if (h) showTab(h);
+});
 
     $('#date').value = state.date;
     $('#date').onchange = () => { state.date = $('#date').value; renderLog(); };
