@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>食事管理（MVP） PWA Starter</title>
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png">
+  <style>
+    :root { color-scheme: light dark }
+    body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; background:#0f172a; color:#e2e8f0; }
+    .wrap { max-width: 520px; margin: 0 auto; padding: 24px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { color:#94a3b8; font-size: 14px; }
+    button { appearance:none; border:1px solid #334155; background:#0ea5e9; color:#0b1220; font-weight:600; padding:10px 14px; border-radius:12px; cursor:pointer; }
+    .muted { font-size:12px; color:#94a3b8 }
+    .row { display:flex; gap:8px; align-items:center; }
+    .mt { margin-top:12px }
+    .ok { color:#22c55e; font-weight:600 }
+    .err { color:#f97316; font-weight:600 }
+    code { background:#0b1220; border:1px solid #1f2937; padding:2px 6px; border-radius:6px }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>食事管理（MVP） — PWA スターター</h1>
+      <p>これは「ホーム画面に追加」でアプリとして動く最小テンプレです。これを HTTPS で公開して Xperia の Chrome で開き、右上メニューから <b>インストール / ホーム画面に追加</b> を選べます。</p>
+      <div class="row mt">
+        <button id="installBtn" style="display:none">インストール（手動プロンプト）</button>
+        <span id="installState" class="muted">Installable: <span id="flag">判定中…</span></span>
+      </div>
+      <p class="muted mt">更新が反映されない場合は端末の「アプリ情報→ストレージ→ストレージとキャッシュを消去」を試してください。</p>
+      <hr class="mt" style="border:0;border-top:1px solid #1f2937">
+      <p class="muted">このテンプレは最低限の PWA 構成（manifest / service worker / HTTPS 前提）だけ入っています。あとで React/Vite 版に差し替えて本体を載せ替えできます。</p>
+    </div>
+  </div>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(console.error));
+    }
+    let deferredPrompt = null;
+    const btn = document.getElementById('installBtn');
+    const flag = document.getElementById('flag');
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btn.style.display = 'inline-block';
+      flag.textContent = '✓';
+      flag.className = 'ok';
+    });
+    btn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log('Install prompt outcome:', outcome);
+      deferredPrompt = null;
+      btn.style.display = 'none';
+    });
+    setTimeout(() => {
+      if (!deferredPrompt) { flag.textContent = '条件待ち'; flag.className = 'err'; }
+    }, 2500);
+  </script>
+</body>
+</html>
