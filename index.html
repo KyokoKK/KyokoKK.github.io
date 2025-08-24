@@ -34,6 +34,86 @@
   <div class="tab" data-tab="foods">食品DB</div>
   <div class="tab" data-tab="settings">設定</div>
 </div>
+    <!-- ▼ここから貼り付け（navの直後） -->
+<section id="log" class="tabpane">
+  <div class="card">
+    <div class="row">
+      <input id="date" type="date" class="grow">
+      <span class="pill">目標: <span id="goalText">--</span></span>
+      <span class="pill">合計: <span id="sumText">--</span></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <select id="foodSelect" class="grow"></select>
+      <input id="grams" type="number" placeholder="グラム(g)" style="width:120px">
+      <button id="addBtn">追加</button>
+    </div>
+    <small class="muted">※ すべて <b>100g基準</b>、入力はグラム(g)。</small>
+  </div>
+
+  <div class="card">
+    <table id="logTable">
+      <thead>
+        <tr><th>食品</th><th>量(g)</th><th>kcal</th><th>P</th><th>F</th><th>C</th><th></th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card"><b>今日のひとこと</b><div id="tip">--</div></div>
+</section>
+
+<section id="foods" class="tabpane" style="display:none">
+  <div class="card">
+    <div class="row">
+      <input id="q" placeholder="検索（例: 鶏胸, 卵, 米）" class="grow">
+      <button id="clearFav">よく使う★を消す</button>
+    </div>
+  </div>
+  <div id="foodsList"></div>
+</section>
+
+<section id="settings" class="tabpane" style="display:none">
+  <div class="card">
+    <div class="row">
+      <div class="grow">体重(kg)<br><input id="w" type="number" placeholder="60"></div>
+      <div class="grow">身長(cm)<br><input id="h" type="number" placeholder="165"></div>
+      <div class="grow">年齢<br><input id="age" type="number" placeholder="30"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="grow">性別<br>
+        <select id="sex"><option value="f">女性</option><option value="m">男性</option></select>
+      </div>
+      <div class="grow">活動量<br>
+        <select id="act">
+          <option value="1.2">低い</option>
+          <option value="1.375">やや低い</option>
+          <option value="1.55">普通</option>
+          <option value="1.725">高い</option>
+          <option value="1.9">とても高い</option>
+        </select>
+      </div>
+      <div class="grow">目標<br>
+        <select id="goal">
+          <option value="-300">減量（-300kcal/日）</option>
+          <option value="0" selected>維持</option>
+          <option value="300">増量（+300kcal/日）</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="saveSettings">保存</button>
+      <small class="muted">保存すると目標PFCが自動計算されます。</small>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span class="pill">目標: <span id="goalCalc">--</span></span>
+    </div>
+  </div>
+</section>
+<!-- ▲ここまで貼り付け -->
+
 
 
     <section id="log" class="tabpane">
@@ -110,7 +190,6 @@
     </section>
   </div>
 
-<!-- ここから <script>〜</script> を “1個だけ” にする -->
 <script>
 // ---- PWA boot (cache bust)
 if ('serviceWorker' in navigator) {
