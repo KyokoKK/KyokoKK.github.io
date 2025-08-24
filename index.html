@@ -29,11 +29,12 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="nav" id="tabs">
-      <div class="tab active" data-tab="log" role="button" tabindex="0">食事ログ</div>
-      <div class="tab" data-tab="foods" role="button" tabindex="0">食品DB</div>
-      <div class="tab" data-tab="settings" role="button" tabindex="0">設定</div>
-    </div>
+  <div class="nav" id="tabs">
+  <div class="tab active" data-tab="log">食事ログ</div>
+  <div class="tab" data-tab="foods">食品DB</div>
+  <div class="tab" data-tab="settings">設定</div>
+</div>
+
 
     <section id="log" class="tabpane">
       <div class="card">
@@ -111,6 +112,38 @@
 
   <script>
     // ---- PWA boot
+    <script>
+// === Tabs 最終兵器（クリック/タップ/ハッシュ対応、既存コードに依存しない）===
+(function(){
+  const tabsEl = document.getElementById('tabs');
+  if (!tabsEl) return;
+
+  function showTab(tab){
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    const cur = tabsEl.querySelector(`.tab[data-tab="${tab}"]`);
+    if (cur) cur.classList.add('active');
+    document.querySelectorAll('.tabpane').forEach(p=>p.style.display = (p.id===tab?'':'none'));
+    if (typeof renderFoodsList === 'function' && tab==='foods') renderFoodsList();
+  }
+
+  // クリック
+  tabsEl.addEventListener('click', e=>{
+    const t = e.target.closest('.tab');
+    if (t) showTab(t.dataset.tab);
+  }, {passive:true});
+
+  // タッチ（端末で click を拾わない事故対策）
+  tabsEl.addEventListener('touchend', e=>{
+    const t = e.target.closest('.tab');
+    if (t) { e.preventDefault(); showTab(t.dataset.tab); }
+  }, {passive:false});
+
+  // URLで #foods を指定されたら強制で切替
+  const h = location.hash.replace('#','');
+  if (h) showTab(h);
+})();
+</script>
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js?v=8').catch(console.error));
     }
