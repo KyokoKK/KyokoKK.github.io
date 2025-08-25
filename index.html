@@ -43,6 +43,17 @@
     </div>
   </div>
   <div class="card">
+    <!-- 予備：CSVを貼り付けて取り込み -->
+  <details>
+    <summary>CSVを貼り付けて取り込む（うまく選べない時の予備）</summary>
+    <textarea id="csvText" rows="6" class="grow" placeholder="ここにCSVを貼り付け"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="csvTextImport">貼り付けを取り込む</button>
+      <button id="csvTextSample">サンプルを入れる</button>
+    </div>
+  </details>
+</div>
+
     <div class="row">
       <select id="foodSelect" class="grow"></select>
       <input id="grams" type="number" placeholder="グラム(g)" style="width:120px">
@@ -442,21 +453,64 @@ async function importCsvFile(file, normalize){
 }
 
 // イベントバインド
-(function bindCsv(){
-  const input = document.getElementById('csvFile');
-  const normalizeChk = document.getElementById('csvNormalize');
-  if (!input) return;
-  input.addEventListener('change', async (e)=>{
-    const f = e.target.files[0];
-    if (!f) return;
+function importCsvText(text, normalize){
+  const rows = parseCSV(text);
+  if (!rows.length){ document.querySelector('#importInfo').textContent = 'CSVが空でした。'; return; }
+
+  const head = rows[0];
+  const col = detectColumns(head);
+  const need = ['name','kcal','p','f','c'];
+  const missing = need.filter(k => col[k] === -1);
+  if (missing.length){
+    document.querySelector('#importInfo').textContent = '必須列が見つかりません（食品名/エネルギー/たんぱく質/脂質/炭水化物）。';
+    return;
+  }
+
+  let added=0, skipped=0;
+  const map = new Map(userFoods.map(x => [x.name, x]));
+
+  for (const r of rows.slice(1)){
+    const name = (r[col.name]||'').toString().trim();
+    if (!name){ skipped++; continue; }
+    const kcal = toPer100(toNum(r[col.kcal]), r[col.w], normalize);
+    const p = toPer100(toNum(r[col.p]), r[col.w], normalize);
+    const f = toPer100(toNum(r[col.f]), r[col.w], normalize);
+    const c = toPer100(toNum(r[col.c]), r[col.w], normalize);
+    if (![kcal,p,f,c].every(Number.isFinite)){ skipped++; continue; }
+    const cat = col.cat>-1 ? (r[col.cat]||'').toString().trim() : 'CSV';
+    map.set(name, { id:'u-'+crypto.randomUUID().slice(0,8), name, cat,
+                    kcal: Math.round(kcal), p:+p.toFixed(1), f:+f.toFixed(1), c: Math.round(c) });
+    added++;
+  }
+
+  userFoods = Array.from(map.values());
+  localStorage.setItem('userFoods', JSON.stringify(userFoods));
+  renderFoodOptions(); renderFoodsList();
+  document.querySelector('#importInfo').textContent = `取り込み完了: ${added}件 / スキップ: ${skipped}件`;
+}
+
+(function bindCsvText(){
+  const $ = s => document.querySelector(s);
+  const btn = $('#csvTextImport');
+  if (!btn) return;
+
+  $('#csvTextSample')?.addEventListener('click', ()=>{
+    $('#csvText').value =
+`食品名,分類,エネルギー(kcal),たんぱく質,脂質,炭水化物
+オートミール,穀類,380,13.7,5.7,69.1
+ささみ,肉類,105,23.9,0.8,0
+ブロッコリー,野菜,33,4.3,0.5,5.2`;
+  });
+
+  btn.addEventListener('click', ()=>{
+    const t = ($('#csvText').value||'').trim();
+    if (!t){ $('#importInfo').textContent = 'テキストが空です。'; return; }
     $('#importInfo').textContent = '取り込み中…';
     try {
-      await importCsvFile(f, !!normalizeChk?.checked);
-    } catch(err){
-      console.error(err);
-      $('#importInfo').textContent = '取り込みでエラーが発生しました。CSVの形式をご確認ください。';
-    } finally {
-      input.value = ''; // 同じファイルでも再選択できるようにクリア
+      importCsvText(t, !!document.getElementById('csvNormalize')?.checked);
+    } catch(e){
+      console.error(e);
+      $('#importInfo').textContent = '取り込みでエラーが発生しました。';
     }
   });
 })();
