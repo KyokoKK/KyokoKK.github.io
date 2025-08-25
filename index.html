@@ -210,7 +210,10 @@ const foodDb = [
   {id:'salmon', name:'サーモン(生)', cat:'魚介', kcal:133, p:20.1, f:4.5, c:0},
   {id:'banana', name:'バナナ', cat:'果物', kcal:93, p:1.1, f:0.2, c:23},
   {id:'olive', name:'オリーブオイル', cat:'油脂', kcal:921, p:0, f:100, c:0}
-];
+];// 追加: ユーザー取り込み食品
+let userFoods = JSON.parse(localStorage.getItem('userFoods')||'[]');
+const allFoods = () => [...foodDb, ...userFoods];
+
 
 // ---- Utils & state
 const $ = (s, el=document)=>el.querySelector(s);
@@ -246,14 +249,15 @@ window.addEventListener('hashchange', ()=>{
 
 // ---- 食品DBレンダリング
 function renderFoodOptions(){
-  const favFirst = [...foodDb].sort((a,b)=>
+  const favFirst = [allfoodDb].sort((a,b)=>
     (state.favs.includes(b.id)-state.favs.includes(a.id)) || a.name.localeCompare(b.name,'ja')
   );
   $('#foodSelect').innerHTML = favFirst.map(f=>`<option value="${f.id}">${state.favs.includes(f.id)?'★ ':''}${f.name}</option>`).join('');
 }
 function renderFoodsList(){
   const q = ($('#q')?.value||'').toLowerCase();
-  const data = foodDb.filter(f => f.name.toLowerCase().includes(q) || f.cat.toLowerCase().includes(q));
+// 変更前: const data = foodDb.filter( ...
+const data = allFoods().filter(f => (f.name||'').toLowerCase().includes(q) || (f.cat||'').toLowerCase().includes(q));
   const wrap = document.createElement('div');
   data.forEach(f=>{
     const div = document.createElement('div');
@@ -284,7 +288,8 @@ $('#clearFav')?.addEventListener('click', ()=>{
 });
 
 $('#addBtn')?.addEventListener('click', ()=>{
-  const food = foodDb.find(f => f.id === $('#foodSelect').value);
+ // 変更前: const food = foodDb.find(f => f.id === $('#foodSelect').value);
+const food = allFoods().find(f => f.id === $('#foodSelect').value);
   const g = Number($('#grams').value||0);
   if (!food || g<=0) { alert('食品とグラムを入力してね'); return; }
   const r = g/100;
@@ -355,7 +360,135 @@ function renderLog(){
   if ($('#date')) $('#date').value = state.date;
   renderFoodOptions(); renderFoodsList(); renderLog();
   const h = location.hash.replace('#',''); if (h) showTab(h);
+})();// ---- CSV import (ゆるめ) ----------------------------------------------------
+
+// 軽量CSVパーサ（クォート/改行対応）
+function parseCSV(text){
+  text = String(text||'').replace(/^\uFEFF/, ''); // BOM除去
+  const out = []; let row = [], field = '', i = 0, q = false;
+  while (i < text.length){
+    const c = text[i];
+    if (q){
+      if (c === '"' && text[i+1] === '"'){ field += '"'; i+=2; continue; }
+      if (c === '"'){ q = false; i++; continue; }
+      field += c; i++; continue;
+    } else {
+      if (c === '"'){ q = true; i++; continue; }
+      if (c === ','){ row.push(field); field=''; i++; continue; }
+      if (c === '\n'){ row.push(field); out.push(row); row=[]; field=''; i++; continue; }
+      if (c === '\r'){ i++; continue; }
+      field += c; i++; continue;
+    }
+  }
+  row.push(field); out.push(row);
+  // 末尾の空行除去
+  return out.filter(r => r.some(x => String(x).trim() !== ''));
+}
+
+// ヘッダ正規化
+function normHeader(s){
+  return String(s||'').toLowerCase()
+    .replace(/\s+/g,'')
+    .replace(/[［\[\(（\)）\]］]/g,'')
+    .replace(/ー/g,'-')
+    .replace(/[\.．]/g,'.');
+}
+
+// 列の自動検出
+function detectColumns(head){
+  const h = head.map(normHeader);
+  const find = (alts)=> h.findIndex(x => alts.some(a => x.includes(a)));
+  return {
+    name: find(['食品名','食品','名称','品目','料理名']),
+    cat:  find(['分類','大分類','中分類','カテゴリ']),
+    kcal: find(['エネルギーkcal','エネルギー.kcal','エネルギー','kcal','熱量']),
+    p:    find(['たんぱく質','ﾀﾝﾊﾟｸ質','蛋白質','たんぱく質g']),
+    f:    find(['脂質','脂肪','脂質g']),
+    c:    find(['炭水化物','糖質','炭水化物g']),
+    w:    find(['重量g','標準重量','重量','可食部重量','g'])
+  };
+}
+
+// 数値に変換（数字以外は除去）
+const toNum = (v) => {
+  const n = parseFloat(String(v).replace(/[^0-9\.\-]/g,''));
+  return Number.isFinite(n) ? n : NaN;
+};
+
+// 100g換算
+function toPer100(v, weight, normalize){
+  if (!normalize) return v;
+  const w = toNum(weight);
+  if (!Number.isFinite(w) || w === 0) return NaN;
+  return v * (100 / w);
+}
+
+// CSV取り込み本体
+async function importCsvFile(file, normalize){
+  const text = await file.text();
+  const rows = parseCSV(text);
+  if (!rows.length) { $('#importInfo').textContent = 'CSVが空でした。'; return; }
+
+  const head = rows[0];
+  const col = detectColumns(head);
+
+  const need = ['name','kcal','p','f','c'];
+  const missing = need.filter(k => col[k] === -1);
+  if (missing.length){
+    $('#importInfo').textContent = '必須列が見つかりませんでした（最低: 食品名, エネルギー, たんぱく質, 脂質, 炭水化物）。';
+    return;
+  }
+
+  let added=0, skipped=0;
+  const list = [];
+
+  for (const r of rows.slice(1)){
+    const name = (r[col.name]||'').toString().trim();
+    if (!name) { skipped++; continue; }
+
+    const kcal = toPer100(toNum(r[col.kcal]), r[col.w], normalize);
+    const p = toPer100(toNum(r[col.p]), r[col.w], normalize);
+    const f = toPer100(toNum(r[col.f]), r[col.w], normalize);
+    const c = toPer100(toNum(r[col.c]), r[col.w], normalize);
+    if (![kcal,p,f,c].every(Number.isFinite)) { skipped++; continue; }
+
+    const cat = col.cat>-1 ? (r[col.cat]||'').toString().trim() : 'CSV';
+    list.push({ id:'u-'+crypto.randomUUID().slice(0,8), name, cat,
+                kcal: Math.round(kcal), p:+p.toFixed(1), f:+f.toFixed(1), c: Math.round(c) });
+  }
+
+  // 既存 userFoods とマージ（同名は上書き）
+  const map = new Map(userFoods.map(x => [x.name, x]));
+  list.forEach(x => map.set(x.name, x));
+  userFoods = Array.from(map.values());
+  localStorage.setItem('userFoods', JSON.stringify(userFoods));
+  added = list.length; // スキップは既に計上済み
+
+  // 画面更新
+  renderFoodOptions(); renderFoodsList();
+  $('#importInfo').textContent = `取り込み完了: ${added}件 / スキップ: ${skipped}件`;
+}
+
+// イベントバインド
+(function bindCsv(){
+  const input = document.getElementById('csvFile');
+  const normalizeChk = document.getElementById('csvNormalize');
+  if (!input) return;
+  input.addEventListener('change', async (e)=>{
+    const f = e.target.files[0];
+    if (!f) return;
+    $('#importInfo').textContent = '取り込み中…';
+    try {
+      await importCsvFile(f, !!normalizeChk?.checked);
+    } catch(err){
+      console.error(err);
+      $('#importInfo').textContent = '取り込みでエラーが発生しました。CSVの形式をご確認ください。';
+    } finally {
+      input.value = ''; // 同じファイルでも再選択できるようにクリア
+    }
+  });
 })();
+
 </script>
 </body>
 </html>
