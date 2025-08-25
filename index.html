@@ -34,7 +34,6 @@
   <div class="tab" data-tab="foods">食品DB</div>
   <div class="tab" data-tab="settings">設定</div>
 </div>
-    <!-- ▼ここから貼り付け（navの直後） -->
 <section id="log" class="tabpane">
   <div class="card">
     <div class="row">
@@ -43,7 +42,6 @@
       <span class="pill">合計: <span id="sumText">--</span></span>
     </div>
   </div>
-
   <div class="card">
     <div class="row">
       <select id="foodSelect" class="grow"></select>
@@ -52,29 +50,22 @@
     </div>
     <small class="muted">※ すべて <b>100g基準</b>、入力はグラム(g)。</small>
   </div>
-
   <div class="card">
     <table id="logTable">
-      <thead>
-        <tr><th>食品</th><th>量(g)</th><th>kcal</th><th>P</th><th>F</th><th>C</th><th></th></tr>
-      </thead>
+      <thead><tr><th>食品</th><th>量(g)</th><th>kcal</th><th>P</th><th>F</th><th>C</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
-
   <div class="card"><b>今日のひとこと</b><div id="tip">--</div></div>
 </section>
 
 <section id="foods" class="tabpane" style="display:none">
-  <!-- 検索カード -->
   <div class="card">
     <div class="row">
       <input id="q" placeholder="検索（例: 鶏胸, 卵, 米）" class="grow">
       <button id="clearFav">よく使う★を消す</button>
     </div>
   </div>
-
-  <!-- CSV ゆるめ取り込みカード（これが見えるはず！） -->
   <div class="card">
     <div class="row">
       <input type="file" id="csvFile" accept=".csv,text/csv" class="grow">
@@ -88,11 +79,8 @@
     </small>
     <div id="importInfo" class="muted" style="margin-top:8px"></div>
   </div>
-
-  <!-- 取り込み後や既存DBをここに並べる -->
   <div id="foodsList"></div>
 </section>
-
 
 <section id="settings" class="tabpane" style="display:none">
   <div class="card">
@@ -107,11 +95,8 @@
       </div>
       <div class="grow">活動量<br>
         <select id="act">
-          <option value="1.2">低い</option>
-          <option value="1.375">やや低い</option>
-          <option value="1.55">普通</option>
-          <option value="1.725">高い</option>
-          <option value="1.9">とても高い</option>
+          <option value="1.2">低い</option><option value="1.375">やや低い</option>
+          <option value="1.55">普通</option><option value="1.725">高い</option><option value="1.9">とても高い</option>
         </select>
       </div>
       <div class="grow">目標<br>
@@ -131,6 +116,7 @@
     </div>
   </div>
 </section>
+
 <!-- ▲ここまで貼り付け -->
 
 
