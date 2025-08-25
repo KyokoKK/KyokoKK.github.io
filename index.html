@@ -66,14 +66,33 @@
 </section>
 
 <section id="foods" class="tabpane" style="display:none">
+  <!-- 検索カード -->
   <div class="card">
     <div class="row">
       <input id="q" placeholder="検索（例: 鶏胸, 卵, 米）" class="grow">
       <button id="clearFav">よく使う★を消す</button>
     </div>
   </div>
+
+  <!-- CSV ゆるめ取り込みカード（これが見えるはず！） -->
+  <div class="card">
+    <div class="row">
+      <input type="file" id="csvFile" accept=".csv,text/csv" class="grow">
+      <label style="display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="csvNormalize"> このCSVは1食(1個)あたり → 100gに換算
+      </label>
+    </div>
+    <small class="muted">
+      使える列名の例：食品名/分類/エネルギー(kcal)/たんぱく質/脂質/炭水化物/重量(g)。<br>
+      欠損行はスキップ。取り込むと検索や★ピンに反映されます。
+    </small>
+    <div id="importInfo" class="muted" style="margin-top:8px"></div>
+  </div>
+
+  <!-- 取り込み後や既存DBをここに並べる -->
   <div id="foodsList"></div>
 </section>
+
 
 <section id="settings" class="tabpane" style="display:none">
   <div class="card">
