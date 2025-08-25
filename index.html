@@ -515,6 +515,138 @@ function importCsvText(text, normalize){
   });
 })();
 
+  <script>
+// --- CSV取り込み 強化パッチ（イベント委任＋進捗表示＋内蔵パーサ） ---
+(function(){
+  const $ = s => document.querySelector(s);
+
+  // 進捗行が無ければ作る
+  (function ensureInfo(){
+    if (!$('#importInfo')) {
+      const card = document.querySelector('#foods .card');
+      if (card) {
+        const d = document.createElement('div');
+        d.id = 'importInfo';
+        d.className = 'muted';
+        d.style.marginTop = '8px';
+        card.appendChild(d);
+      }
+    }
+  })();
+
+  // 簡易CSVパーサ（クォート/改行対応）
+  function parseCSV(text){
+    text = String(text || '').replace(/\uFEFF/g, ''); // BOM除去
+    const out = []; let row = [], cur = '', q = false;
+    for (let i=0; i<text.length; i++){
+      const ch = text[i], nx = text[i+1];
+      if (q){
+        if (ch === '"'){ if (nx === '"'){ cur += '"'; i++; } else { q = false; } }
+        else { cur += ch; }
+      } else {
+        if (ch === ','){ row.push(cur); cur = ''; }
+        else if (ch === '\n'){ row.push(cur); out.push(row); row = []; cur = ''; }
+        else if (ch === '\r'){ /* ignore */ }
+        else if (ch === '"'){ q = true; }
+        else { cur += ch; }
+      }
+    }
+    row.push(cur); out.push(row);
+    return out.filter(r => r.some(c => String(c).trim() !== ''));
+  }
+
+  // 列推定（日本語/英語どちらも可）
+  function detectColumns(head){
+    head = head.map(h => String(h||'').toLowerCase());
+    const idx = names => head.findIndex(h => names.some(n => h.includes(n)));
+    return {
+      name: idx(['食品','品名','name']),
+      cat : idx(['分類','カテゴリ','category']),
+      kcal: idx(['kcal','エネル']),
+      p   : idx(['たんぱ','蛋白','protein',' p']),
+      f   : idx(['脂','fat',' f']),
+      c   : idx(['炭水','carb','糖',' c']),
+      w   : idx(['重量','重さ','g/個','weight'])
+    };
+  }
+
+  const toNum = v => {
+    if (v==null) return NaN;
+    const s = String(v).replace(/[^\d.\-]/g,'');
+    return s ? Number(s) : NaN;
+  };
+  const toPer100 = (val, weight, normalize) => {
+    if (!normalize) return val;
+    const w = toNum(weight);
+    if (!Number.isFinite(val) || !Number.isFinite(w) || w<=0) return NaN;
+    return val * (100 / w);
+  };
+
+  function finishInfo(ok, add, skip){
+    const el = $('#importInfo');
+    el.textContent = ok ? `取り込み完了: ${add}件 / スキップ: ${skip}件`
+                        : el.textContent;
+  }
+
+  // テキスト取り込み（ファイル→テキストでもこれを使用）
+  function importCsvText(text, normalize){
+    const info = $('#importInfo'); if (!info) return;
+    const rows = parseCSV(text);
+    if (!rows.length){ info.textContent = 'CSVが空でした。'; return; }
+    const head = rows[0];
+    const col = detectColumns(head);
+    const need = ['name','kcal','p','f','c'];
+    const miss = need.filter(k => col[k] === -1);
+    if (miss.length){ info.textContent = '必須列（食品名/kcal/P/F/C）が見つかりません。'; return; }
+
+    window.userFoods = Array.isArray(window.userFoods) ? window.userFoods : [];
+    const map = new Map(window.userFoods.map(x => [x.name, x]));
+    let added = 0, skipped = 0;
+
+    for (const r of rows.slice(1)){
+      const name = (r[col.name]||'').toString().trim();
+      if (!name){ skipped++; continue; }
+      const kcal = toPer100(toNum(r[col.kcal]), r[col.w], normalize);
+      const p    = toPer100(toNum(r[col.p]),    r[col.w], normalize);
+      const f    = toPer100(toNum(r[col.f]),    r[col.w], normalize);
+      const c    = toPer100(toNum(r[col.c]),    r[col.w], normalize);
+      if (![kcal,p,f,c].every(Number.isFinite)){ skipped++; continue; }
+      const cat  = col.cat>-1 ? (r[col.cat]||'').toString().trim() : 'CSV';
+      map.set(name, { id:'u-'+crypto.randomUUID().slice(0,8), name, cat,
+                      kcal: Math.round(kcal), p:+p.toFixed(1), f:+f.toFixed(1), c: Math.round(c) });
+      added++;
+    }
+    window.userFoods = Array.from(map.values());
+    localStorage.setItem('userFoods', JSON.stringify(window.userFoods));
+    if (typeof renderFoodOptions==='function') renderFoodOptions();
+    if (typeof renderFoodsList  ==='function') renderFoodsList();
+    finishInfo(true, added, skipped);
+  }
+  window.importCsvText = importCsvText;
+
+  async function importCsvFile(file, normalize){
+    const info = $('#importInfo');
+    info.textContent = `読み込み開始: ${file.name}`;
+    const text = await file.text();
+    importCsvText(text, normalize);
+  }
+  window.importCsvFile = importCsvFile;
+
+  // ★イベント委任：ページ内に #csvFile が複数/差し替えでも確実に拾う
+  document.addEventListener('change', (e)=>{
+    if (e.target && e.target.id === 'csvFile') {
+      const f = e.target.files && e.target.files[0];
+      const normalize = !!document.getElementById('csvNormalize')?.checked;
+      if (!f){ $('#importInfo').textContent = 'ファイルが選択されませんでした。'; return; }
+      importCsvFile(f, normalize).catch(err=>{
+        console.error(err);
+        $('#importInfo').textContent = '取り込みでエラーが発生しました。CSVの形式をご確認ください。';
+      }).finally(()=>{ e.target.value = ''; }); // 同じファイルでも再選択可
+    }
+  }, true);
+})();
+
+
 </script>
 </body>
 </html>
